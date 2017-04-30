@@ -6,10 +6,11 @@ from copy import copy, deepcopy
 from pickle import HIGHEST_PROTOCOL, dumps, loads
 
 import pytest
+from sympy import S
 from six.moves import range
 
 from cobra import DictList, Object
-from cobra.util import Frozendict
+from cobra.util import Frozendict, get_objective_for
 
 
 @pytest.fixture(scope="session")
@@ -322,3 +323,14 @@ class FrozendictTestCase:
             frozen_dict.update()
 
         assert hasattr(frozen_dict, "__hash__")
+
+
+def test_get_objective_for(model):
+    assert get_objective_for(model, None) is model.objective
+    assert get_objective_for(model, model.objective) is model.objective
+    assert get_objective_for(model, S.Zero).expression is S.Zero
+    assert (str(get_objective_for(model, 'ACALD').expression) ==
+            str(model.reactions.ACALD.flux_expression))
+    with model:
+        assert (str(get_objective_for(model, 'f6p_c').expression) ==
+                str(model.reactions.DM_f6p_c.flux_expression))

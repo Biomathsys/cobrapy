@@ -166,7 +166,7 @@ def interface_to_str(interface):
 
     Parameters
     ----------
-    interface : string
+    interface : string, ModuleType
         Full name of the interface in optlang or cobra representation.
         For instance 'optlang.glpk_interface' or 'optlang-glpk'.
 
