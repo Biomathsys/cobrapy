@@ -7,7 +7,7 @@ from warnings import warn
 
 from optlang.interface import OPTIMAL
 from cobra.core import Model
-from cobra.util import assert_optimal, get_objective_for
+from cobra.util import assert_optimal, fix_objective_as_constraint
 
 
 class GapFiller(object):
@@ -31,15 +31,13 @@ class GapFiller(object):
     exchange (uptake) reactions added and 1 for added demand reactions.
 
     Note that this is a mixed-integer linear program and as such will
-    expensive to solve for large models. Consider using CORDA instead _[3,4].
+    expensive to solve for large models. Consider using alternatives [3]_
+    such as CORDA instead [4,5]_.
 
     Parameters
     ----------
     model : cobra.Model
         The model to perform gap filling on.
-    objective : model.interface.Objective
-        The objective that must be able to reach a given flux value in the gap
-        filled model.
     universal : cobra.Model
         A universal model with reactions that can be used to complete the
         model.
@@ -75,15 +73,17 @@ class GapFiller(object):
        Biology 5, no. 3 (March 13, 2009): e1000308.
        doi:10.1371/journal.pcbi.1000308.
 
-       [3] Schultz, André, and Amina A. Qutub. “Reconstruction of
+       [3] http://opencobra.github.io/cobrapy/tags/gapfilling/
+
+       [4] Schultz, André, and Amina A. Qutub. “Reconstruction of
        Tissue-Specific Metabolic Networks Using CORDA.” Edited by Costas D.
        Maranas. PLOS Computational Biology 12, no. 3 (March 4, 2016):
        e1004808. doi:10.1371/journal.pcbi.1004808.
 
-       [4] Diener, Christian https://github.com/cdiener/corda
+       [5] Diener, Christian https://github.com/cdiener/corda
      """
 
-    def __init__(self, model, objective=None, universal=None, lower_bound=0.05,
+    def __init__(self, model, universal=None, lower_bound=0.05,
                  penalties=None, exchange_reactions=False,
                  demand_reactions=True, integer_threshold=1e-6):
         self.original_model = model
@@ -94,7 +94,7 @@ class GapFiller(object):
             self.model.solver.configuration._iocp.tol_int = integer_threshold
         except AttributeError:
             try:
-                self.model.solver.problem.parameters.mip.tolerances.\
+                self.model.solver.problem.parameters.mip.tolerances. \
                     integrality.set(integer_threshold)
             except AttributeError:
                 warn("tried to set integrality constraint, but don't know "
@@ -107,23 +107,9 @@ class GapFiller(object):
         self.integer_threshold = integer_threshold
         self.indicators = list()
         self.costs = dict()
-        self.objective = model.objective if objective is None else objective
         self.extend_model(exchange_reactions, demand_reactions)
-        self.fix_objective_as_constraint(lower_bound)
+        fix_objective_as_constraint(self.model, bound=lower_bound)
         self.add_switches_and_objective()
-
-    def fix_objective_as_constraint(self, lower_bound):
-        """Fix objective as a constraint.
-
-        Parameters
-        ----------
-        lower_bound : float
-            Fix the lower bound for the objective as a constraint.
-        """
-        constraint = self.model.problem.Constraint(
-            self.objective.expression, lb=lower_bound,
-            name='original_objective_constraint')
-        self.model.add_cons_vars([constraint], sloppy=True)
 
     def extend_model(self, exchange_reactions=False, demand_reactions=True):
         """Extend gapfilling model.
@@ -255,31 +241,23 @@ class GapFiller(object):
 
     def validate(self, reactions):
         with self.original_model as model:
-            model.objective = self.objective
             model.add_reactions(reactions)
             model.solver.optimize()
             return (model.solver.status == OPTIMAL and
                     model.solver.objective.value >= self.lower_bound)
 
 
-def gapfill(model, target=None, universal=None, lower_bound=0.05,
+def gapfill(model, universal=None, lower_bound=0.05,
             penalties=None, demand_reactions=True, exchange_reactions=False,
             iterations=1):
     """Perform gapfilling on a model.
 
-    Set appropriate objective for a model and perform gapfilling. See
-    documentation for the class GapFiller.
+    See documentation for the class GapFiller.
 
     Parameters
     ----------
     model : cobra.Model
         The model to perform gap filling on.
-    target : string, cobra.Reaction, cobra.Metabolite, None
-        Either a reaction or reaction identifier to use as objective, or,
-        a metabolite or metabolite identifier for which we shall create a
-        demand reaction and maximize the flux through. The model is reverted
-        to original state after gapfilling. Use the model's current
-        objective if left missing.
     universal : cobra.Model, None
         A universal model with reactions that can be used to complete the
         model. Only gapfill considering demand and exchange reactions if
@@ -320,15 +298,13 @@ def gapfill(model, target=None, universal=None, lower_bound=0.05,
     >>> universal = Model('universal')
     >>> universal.add_reactions(model.reactions.GF6PTA.copy())
     >>> model.remove_reactions([model.reactions.GF6PTA])
-    >>> gapfill(model, model.objective, universal)
+    >>> gapfill(model, universal)
     """
-    with model:
-        objective = get_objective_for(model, target)
-        gapfiller = GapFiller(model, universal=universal, objective=objective,
-                              lower_bound=lower_bound, penalties=penalties,
-                              demand_reactions=demand_reactions,
-                              exchange_reactions=exchange_reactions)
-        return gapfiller.fill(iterations=iterations)
+    gapfiller = GapFiller(model, universal=universal,
+                          lower_bound=lower_bound, penalties=penalties,
+                          demand_reactions=demand_reactions,
+                          exchange_reactions=exchange_reactions)
+    return gapfiller.fill(iterations=iterations)
 
 
 def growMatch(model, Universal, dm_rxns=False, ex_rxns=False,
@@ -341,9 +317,8 @@ def growMatch(model, Universal, dm_rxns=False, ex_rxns=False,
         raise ValueError('growMatch implementation for cobra legacy solvers'
                          ' is defunct. Choose optlang solver with '
                          'model.solver = "solver"')
-    return gapfill(model, target=None, universal=Universal,
-                   iterations=iterations,
-                   penalties=penalties,
+    return gapfill(model, universal=Universal,
+                   iterations=iterations, penalties=penalties,
                    demand_reactions=dm_rxns, exchange_reactions=ex_rxns)
 
 
@@ -357,6 +332,8 @@ def SMILEY(model, metabolite_id, Universal,
         raise ValueError('SMILEY implementation for cobra legacy solvers'
                          ' is defunct. Choose optlang solver with '
                          'model.solver = "solver"')
-    return gapfill(model, target=metabolite_id, universal=Universal,
-                   penalties=penalties,
-                   demand_reactions=dm_rxns, exchange_reactions=ex_rxns)
+    with model:
+        metabolite = model.metabolites.get_by_id(metabolite_id)
+        model.objective = model.add_boundary(metabolite, type='demand')
+        return gapfill(model, universal=Universal, penalties=penalties,
+                       demand_reactions=dm_rxns, exchange_reactions=ex_rxns)

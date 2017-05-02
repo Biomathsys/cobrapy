@@ -415,19 +415,21 @@ class TestCobraFluxAnalysis:
 
         # # GrowMatch
         # result = gapfilling.growMatch(m, universal)[0]
-        result = gapfilling.gapfill(m, None, universal)[0]
+        result = gapfilling.gapfill(m, universal)[0]
         assert len(result) == 1
         assert result[0].id == "a2b"
 
         # # SMILEY
         # result = gapfilling.SMILEY(m, "b", universal)[0]
-        result = gapfilling.gapfill(m, 'b', universal)[0]
-        assert len(result) == 1
-        assert result[0].id == "a2b"
+        with m:
+            m.objective = m.add_boundary(m.metabolites.b, type='demand')
+            result = gapfilling.gapfill(m, universal)[0]
+            assert len(result) == 1
+            assert result[0].id == "a2b"
 
         # # 2 rounds of GrowMatch with exchange reactions
         # result = gapfilling.growMatch(m, None, ex_rxns=True, iterations=2)
-        result = gapfilling.gapfill(m, None, None, exchange_reactions=True,
+        result = gapfilling.gapfill(m, None, exchange_reactions=True,
                                     iterations=2)
         assert len(result) == 2
         assert len(result[0]) == 1
@@ -441,7 +443,7 @@ class TestCobraFluxAnalysis:
                 reaction = model.reactions.get_by_id(i)
                 universal.add_reactions([reaction.copy()])
                 model.remove_reactions([reaction])
-            gf = gapfilling.GapFiller(model, model.objective, universal,
+            gf = gapfilling.GapFiller(model, universal,
                                       penalties={'TKT2': 1e3},
                                       demand_reactions=False)
             solution = gf.fill()
