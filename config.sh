@@ -9,6 +9,7 @@ function pre_build {
         export CXX=clang++
         export CFLAGS="-fPIC -O3 -arch i386 -arch x86_64 -g -DNDEBUG -mmacosx-version-min=10.6"
     else
+        pip install auditwheel==1.5
         yum install -y libxslt libxml2 libxml2-devel libxslt-devel
     fi
     curl -O http://ftp.gnu.org/gnu/glpk/glpk-4.61.tar.gz
@@ -27,7 +28,7 @@ function build_wheel {
     build_bdist_wheel $@
     # since swiglpk doesn't have wheels, we currently must keep glpk
     # installed for testing
-	# (cd glpk-4.60 && make uninstall)
+	(cd glpk-4.61 && make uninstall)
 }
 
 function run_tests_in_repo {
