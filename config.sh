@@ -9,7 +9,7 @@ function pre_build {
         export CXX=clang++
         export CFLAGS="-fPIC -O3 -arch i386 -arch x86_64 -g -DNDEBUG -mmacosx-version-min=10.6"
     else
-        pip install auditwheel==1.5
+        pip install pip install git+https://github.com/hredestig/auditwheel.git@fix15#egg=auditwheel
         yum install -y libxslt libxml2 libxml2-devel libxslt-devel
     fi
     curl -O http://ftp.gnu.org/gnu/glpk/glpk-4.61.tar.gz
